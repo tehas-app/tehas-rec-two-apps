@@ -1,0 +1,35 @@
+# One job named "test" (App github-actions) that uploads a SARIF whose tool
+# is named "test": GitHub's code scanning (App github-advanced-security)
+# then posts its own check run named after the tool. It also posts a commit
+# status with context "test" through the same GITHUB_TOKEN.
+name: Scan
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+  security-events: write
+  statuses: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write a SARIF whose tool is named test
+        run: |
+          cat > test.sarif <<'SARIF'
+          {"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json",
+           "runs":[{"tool":{"driver":{"name":"test","informationUri":"https://example.org/test","rules":[{"id":"T1","shortDescription":{"text":"recording rule"}}]}},
+                    "results":[{"ruleId":"T1","level":"note","message":{"text":"recording result"},
+                                "locations":[{"physicalLocation":{"artifactLocation":{"uri":"README.md"},"region":{"startLine":1}}}]}]}]}
+          SARIF
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: test.sarif
+          category: test
+      - name: A commit status with context test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" -f state=success -f context=test -f description="status named test" >/dev/null
